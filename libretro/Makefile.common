@@ -54,6 +54,7 @@ SOURCES_CXX := $(CORE_DIR)/apu/apu.cpp \
 				 $(CORE_DIR)/snes9x.cpp \
 				 $(CORE_DIR)/spc7110.cpp \
 				 $(CORE_DIR)/srtc.cpp \
+				 $(CORE_DIR)/smedit_debugger.cpp \
 				 $(CORE_DIR)/tile.cpp \
 				 $(CORE_DIR)/tileimpl-n1x1.cpp \
 				 $(CORE_DIR)/tileimpl-n2x1.cpp \

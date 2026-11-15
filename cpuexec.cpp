@@ -12,6 +12,7 @@
 #include "fxemu.h"
 #include "snapshot.h"
 #include "movie.h"
+#include "smedit_debugger.h"
 #ifdef DEBUGGER
 #include "debug.h"
 #include "missing.h"
@@ -135,6 +136,9 @@ void S9xMainLoop (void)
 			break;
 		}
 
+		if (SmeditDebuggerBeforeInstruction())
+			break;
+
 		uint8				Op;
 		struct	SOpcodes	*Opcodes;
 
@@ -173,6 +177,9 @@ void S9xMainLoop (void)
 
 		if (Settings.SA1)
 			S9xSA1MainLoop();
+
+		if (SmeditDebuggerAfterInstruction())
+			break;
 	}
 
 	S9xPackStatus();
