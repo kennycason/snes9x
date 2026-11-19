@@ -16,6 +16,27 @@
 #include "seta.h"
 #include "bsx.h"
 #include "msu1.h"
+#include "smedit_debugger.h"
+
+class SmeditDebuggerByteReadScope
+{
+public:
+	SmeditDebuggerByteReadScope(uint32 address, uint8 *value) : address(address), value(value) {}
+	~SmeditDebuggerByteReadScope() { SmeditDebuggerObserveRead(address, 1, *value); }
+private:
+	uint32 address;
+	uint8 *value;
+};
+
+class SmeditDebuggerWordReadScope
+{
+public:
+	SmeditDebuggerWordReadScope(uint32 address, uint16 *value) : address(address), value(value) {}
+	~SmeditDebuggerWordReadScope() { SmeditDebuggerObserveRead(address, 2, *value); }
+private:
+	uint32 address;
+	uint16 *value;
+};
 
 #define addCyclesInMemoryAccess \
 	if (!CPU.InDMAorHDMA) \
@@ -59,7 +80,8 @@ inline uint8 S9xGetByte (uint32 Address)
 	int		block = (Address & 0xffffff) >> MEMMAP_SHIFT;
 	uint8	*GetAddress = Memory.Map[block];
 	int32	speed = memory_speed(Address);
-	uint8	byte;
+	uint8	byte = OpenBus;
+	SmeditDebuggerByteReadScope smedit_debug_read_scope(Address, &byte);
 
 	if (GetAddress >= (uint8 *) CMemory::MAP_LAST)
 	{
@@ -159,7 +181,8 @@ inline uint8 S9xGetByte (uint32 Address)
 
 inline uint16 S9xGetWord (uint32 Address, enum s9xwrap_t w = WRAP_NONE)
 {
-	uint16	word;
+	uint16	word = OpenBus | (OpenBus << 8);
+	SmeditDebuggerWordReadScope smedit_debug_read_scope(Address, &word);
 
 	uint32	mask = MEMMAP_MASK & (w == WRAP_PAGE ? 0xff : (w == WRAP_BANK ? 0xffff : 0xffffff));
 	if ((Address & mask) == mask)
@@ -173,19 +196,21 @@ inline uint16 S9xGetWord (uint32 Address, enum s9xwrap_t w = WRAP_NONE)
 			case WRAP_PAGE:
 				a.xPBPC = Address;
 				a.B.xPCl++;
-				return (word | (S9xGetByte(a.xPBPC) << 8));
+				word |= S9xGetByte(a.xPBPC) << 8;
+				return (word);
 
 			case WRAP_BANK:
 				a.xPBPC = Address;
 				a.W.xPC++;
-				return (word | (S9xGetByte(a.xPBPC) << 8));
+				word |= S9xGetByte(a.xPBPC) << 8;
+				return (word);
 
 			case WRAP_NONE:
 			default:
-				return (word | (S9xGetByte(Address + 1) << 8));
+				word |= S9xGetByte(Address + 1) << 8;
+				return (word);
 		}
 	}
-
 	int		block = (Address & 0xffffff) >> MEMMAP_SHIFT;
 	uint8	*GetAddress = Memory.Map[block];
 	int32	speed = memory_speed(Address);
@@ -319,6 +344,7 @@ inline uint16 S9xGetWord (uint32 Address, enum s9xwrap_t w = WRAP_NONE)
 
 inline void S9xSetByte (uint8 Byte, uint32 Address)
 {
+	SmeditDebuggerObserveWrite(Address, 1, Byte);
 	int		block = (Address & 0xffffff) >> MEMMAP_SHIFT;
 	uint8	*SetAddress = Memory.WriteMap[block];
 	int32	speed = memory_speed(Address);
@@ -425,6 +451,7 @@ inline void S9xSetByte (uint8 Byte, uint32 Address)
 
 inline void S9xSetWord (uint16 Word, uint32 Address, enum s9xwrap_t w = WRAP_NONE, enum s9xwriteorder_t o = WRITE_01)
 {
+	SmeditDebuggerObserveWrite(Address, 2, Word);
 	uint32	mask = MEMMAP_MASK & (w == WRAP_PAGE ? 0xff : (w == WRAP_BANK ? 0xffff : 0xffffff));
 	if ((Address & mask) == mask)
 	{
@@ -458,7 +485,6 @@ inline void S9xSetWord (uint16 Word, uint32 Address, enum s9xwrap_t w = WRAP_NON
 
 		return;
 	}
-
 	int		block = (Address & 0xffffff) >> MEMMAP_SHIFT;
 	uint8	*SetAddress = Memory.WriteMap[block];
 	int32	speed = memory_speed(Address);

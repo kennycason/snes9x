@@ -2018,7 +2018,19 @@ void retro_run()
  */
 extern "C" RETRO_API uint32_t smedit_debug_api_version(void)
 {
-    return 1;
+    return 3;
+}
+
+extern "C" RETRO_API int smedit_debug_set_watchpoints(
+    const struct SmeditDebugWatchpoint *watchpoints,
+    uint32_t watchpoint_count)
+{
+    return SmeditDebuggerSetWatchpoints(watchpoints, watchpoint_count) ? 1 : 0;
+}
+
+extern "C" RETRO_API int smedit_debug_get_watchpoint_hit(struct SmeditDebugWatchpointHit *hit)
+{
+    return SmeditDebuggerGetWatchpointHit(hit) ? 1 : 0;
 }
 
 extern "C" RETRO_API int smedit_debug_get_cpu_state(struct SmeditDebugCpuState *state)
@@ -2067,6 +2079,58 @@ extern "C" RETRO_API int smedit_debug_run_until(
     if (SmeditDebuggerIsActive())
         SmeditDebuggerStop(SMEDIT_DEBUG_HALT_FRAME_LIMIT);
     return (int) SmeditDebuggerHaltReason();
+}
+
+static int smedit_debug_structured_step(
+    enum SmeditDebugStepControl control,
+    const uint32_t *addresses,
+    uint32_t address_count,
+    uint64_t instruction_limit,
+    uint32_t frame_limit)
+{
+    if (frame_limit == 0 ||
+        !SmeditDebuggerBeginStructuredStep(control, addresses, address_count, instruction_limit))
+        return (int) SmeditDebuggerHaltReason();
+
+    uint32_t frames = 0;
+    uint32_t no_progress_frames = 0;
+    while (SmeditDebuggerIsActive() && frames < frame_limit)
+    {
+        uint64_t before = SmeditDebuggerInstructions();
+        retro_run();
+        frames++;
+        if (SmeditDebuggerInstructions() == before)
+            no_progress_frames++;
+        else
+            no_progress_frames = 0;
+
+        if (SmeditDebuggerIsActive() &&
+            ((CPU.Flags & HALTED_FLAG) || Settings.StopEmulation || no_progress_frames >= 120))
+            SmeditDebuggerStop(SMEDIT_DEBUG_HALT_CPU_STOPPED);
+    }
+    if (SmeditDebuggerIsActive())
+        SmeditDebuggerStop(SMEDIT_DEBUG_HALT_FRAME_LIMIT);
+    return (int) SmeditDebuggerHaltReason();
+}
+
+extern "C" RETRO_API int smedit_debug_step_over(
+    const uint32_t *addresses,
+    uint32_t address_count,
+    uint64_t instruction_limit,
+    uint32_t frame_limit)
+{
+    return smedit_debug_structured_step(
+        SMEDIT_DEBUG_CONTROL_OVER, addresses, address_count, instruction_limit, frame_limit);
+}
+
+extern "C" RETRO_API int smedit_debug_step_out(
+    const uint32_t *addresses,
+    uint32_t address_count,
+    uint64_t instruction_limit,
+    uint32_t frame_limit)
+{
+    return smedit_debug_structured_step(
+        SMEDIT_DEBUG_CONTROL_OUT, addresses, address_count, instruction_limit, frame_limit);
 }
 
 extern "C" RETRO_API int smedit_debug_read_bus(uint32_t address, uint8_t *data, uint32_t size)

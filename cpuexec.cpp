@@ -65,6 +65,7 @@ void S9xMainLoop (void)
 				}
 
 				CHECK_FOR_IRQ_CHANGE();
+				SmeditDebuggerEnterInterrupt();
 				S9xOpcode_NMI();
 			}
 		}
@@ -94,6 +95,7 @@ void S9xMainLoop (void)
 			{
 				/* The flag pushed onto the stack is the new value */
 				CHECK_FOR_IRQ_CHANGE();
+				SmeditDebuggerEnterInterrupt();
 				S9xOpcode_IRQ();
 			}
 		}
@@ -173,7 +175,9 @@ void S9xMainLoop (void)
 		}
 
 		Registers.PCw++;
+		SmeditDebuggerInstructionStarted((Registers.PBPC - 1) & 0x00ffffff, Op);
 		(*Opcodes[Op].S9xOpcode)();
+		SmeditDebuggerInstructionEnded();
 
 		if (Settings.SA1)
 			S9xSA1MainLoop();
